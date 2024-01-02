@@ -29,7 +29,7 @@ contract Token is ERC20, Ownable {
     Distributor distributor;
     
     bool private swapping;
-    bool private distributionEnabled;
+    bool public distributionEnabled;
     bool public reflectionsEnabled;
 
     //Mapping
@@ -90,7 +90,6 @@ contract Token is ERC20, Ownable {
     
     function setSwapTokensAtAmount(uint256 amount) external onlyOwner {
         require(amount <= totalSupply(), "Amount cannot be over the total supply" );
-        require(amount >= 1 *(10 ** 18), "Minimum `1000` token per swap required");
 
         swapTokensAtAmount = amount;
         emit SwapTokensAmountUpdated(amount);
@@ -186,78 +185,73 @@ contract Token is ERC20, Ownable {
         );
     }
 
-    function swapAvaxForReflection(uint256 AvaxAmount) private {
+	function swapAvaxForReflection(uint256 AvaxAmount) private {
         address[] memory path = new address[](2);
         path[0] = joeRouter.WAVAX();
         path[1] = address(reflectionToken);
-
+		
         joeRouter.swapExactAVAXForTokens{value: AvaxAmount}(
             0,
             path,
             address(this),
             block.timestamp
         );
-
     }
 
-    function _transfer(address sender,address recipient, uint256 amount) internal override(ERC20) {
-        if(!isDividendExempt[recipient]) {
-            require(amount <= maxTx, "Amount over max transaction allowed");
-            // require(balanceOf(recipient) + amount <= maxWallet, "Balance is exceeding maxWallet");
-        }
+	function _transfer(address sender, address recipient, uint256 amount) internal override(ERC20){      
+		if(!isDividendExempt[recipient]) {
+			require(amount <= maxTx, "Amount over max transaction allowed");
+			// require(balanceOf(recipient) + amount <= maxWallet, "Max wallet reached");
+		}
+	
+		uint256 contractTokenBalance = balanceOf(address(this));
+		bool canSwap = contractTokenBalance >= swapTokensAtAmount;
+		
+		if (canSwap == true && !swapping && isAutomatedMarketMakerPairs[recipient] == true && reflectionsEnabled == true) 
+		{
+			uint256 tokenToReflection = reflectionFeeTotal;
+			uint256 tokenToSwap = tokenToReflection;
 
-        uint256 contractTokenBalance = balanceOf(address(this));
-        bool canSwap = contractTokenBalance >= swapTokensAtAmount;
-
-        if (canSwap == true && !swapping && isAutomatedMarketMakerPairs[recipient] == true && reflectionsEnabled == true )
-        {
-            uint256 tokenToReflection = reflectionFeeTotal;
-            uint256 tokenToSwap = tokenToReflection;
-
-            if(tokenToSwap >= swapTokensAtAmount)
-            {
-                swapping = true;
-                swapTokensForAvax(swapTokensAtAmount);
-                uint256 AvaxBalance = address(this).balance;
-
-                uint256 reflectionPart = AvaxBalance;
-
-                if(reflectionPart > 0)
-                {
+			if(tokenToSwap >= swapTokensAtAmount) 
+			{
+			    swapping = true;
+				swapTokensForAvax(swapTokensAtAmount);
+				uint256 AvaxBalance = address(this).balance;
+                
+				uint256 reflectionPart = AvaxBalance;
+				
+				if(reflectionPart > 0)
+				{
                     swapAvaxForReflection(reflectionPart);
-                    uint256 reflectionBalance = IERC20(reflectionToken).balanceOf(address(this));
-                    IERC20(reflectionToken).transfer(distributorAddress, reflectionBalance);
-                    distributor.deposit(reflectionBalance);
-                    reflectionFeeTotal = reflectionFeeTotal -((swapTokensAtAmount * tokenToReflection) / (tokenToSwap));
-                }
-                swapping = false;
-            }
+					uint256 reflectionBalance = IERC20(reflectionToken).balanceOf(address(this));
+					IERC20(reflectionToken).transfer(distributorAddress, reflectionBalance);
+				    distributor.deposit(reflectionBalance);
+				    reflectionFeeTotal = reflectionFeeTotal - ((swapTokensAtAmount * tokenToReflection) / (tokenToSwap));
+				}
+				swapping = false;
+			}
         }
-
-        if(isExcludedFromFee[sender] || isExcludedFromFee[recipient])
-        {
+		
+		if(isExcludedFromFee[sender] || isExcludedFromFee[recipient]) 
+		{
             super._transfer(sender, recipient, amount);
         }
-        else{
-            uint256 allFee = collectFee(amount,isAutomatedMarketMakerPairs[recipient], !isAutomatedMarketMakerPairs[sender] && !isAutomatedMarketMakerPairs[recipient]);
-            if(allFee > 0)
-            {
-                super._transfer(sender,address(this),allFee);
-            }
-            super._transfer(sender,recipient, amount - allFee);
+		else 
+		{
+		    uint256 allFee = collectFee(amount, isAutomatedMarketMakerPairs[recipient], !isAutomatedMarketMakerPairs[sender] && !isAutomatedMarketMakerPairs[recipient]);
+			if(allFee > 0) 
+			{
+			   super._transfer(sender, address(this), allFee);
+			}
+			super._transfer(sender, recipient, amount - allFee);
         }
-        if(!isDividendExempt[sender]){
-            try distributor.setShare(sender, balanceOf(sender)) {} catch {} 
-            }
-        if(!isDividendExempt[recipient]){ 
-            try distributor.setShare(recipient,balanceOf(recipient)) {} catch {}
-        }
-        if(distributionEnabled)
-        {
-            try distributor.process(distributorGas) {} catch {}
-        }
-
-
+		
+		if(!isDividendExempt[sender]){ try distributor.setShare(sender, balanceOf(sender)) {} catch {} }
+        if(!isDividendExempt[recipient]){ try distributor.setShare(recipient, balanceOf(recipient)) {} catch {} }
+		if(distributionEnabled) 
+		{
+		   try distributor.process(distributorGas) {} catch {}
+		}
     }
 
 
