@@ -28,7 +28,7 @@ contract Token is ERC20, Ownable {
     address public distributorAddress;
     Distributor distributor;
     
-    bool private swapping;
+    bool public swapping;
     bool public distributionEnabled;
     bool public reflectionsEnabled;
 
@@ -145,6 +145,8 @@ contract Token is ERC20, Ownable {
 
     function setReflectionToken(address _reflectionToken) external onlyOwner {
         require(_reflectionToken != address(0),"Reflection Token cannot be address zero");
+
+        // distributor.resetUnpaidEarnings();
         reflectionToken = _reflectionToken;
         distributor.updateReflectionToken(_reflectionToken);
         emit RewardTokenUpdated(_reflectionToken);
@@ -158,6 +160,16 @@ contract Token is ERC20, Ownable {
         (bool success, ) = ownerPayable.call{value: balance}("");
         require(success, "Transfer Failed");
     }
+
+    function withdrawSpecificReflectionToken(address tokenAddress, address to,uint256 amount) external onlyOwner {
+    require(tokenAddress != address(0), "Token address cannot be the zero address");
+    require(to != address(0), "Withdrawal address cannot be the zero address");
+    
+    uint256 tokenBalance = IERC20(tokenAddress).balanceOf(distributorAddress);
+    if (tokenBalance > 0) {
+        distributor.withdrawOldReflectionToken(tokenAddress,to, amount);
+    }
+}
 
     //Functions for Fee
 

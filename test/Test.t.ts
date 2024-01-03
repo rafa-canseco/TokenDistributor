@@ -2,9 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { Token, Token__factory } from "../typechain-types";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
-import { ContractTransaction } from 'ethers';
-import { Log } from 'ethers';
-import { BADFLAGS } from "dns";
+
 
 
 describe("ContratoToken", function () {
@@ -377,83 +375,332 @@ describe("ContratoToken", function () {
             const new_balance_contract = await token.balanceOf(token_address)
             expect(new_balance_contract).to.be.gt(balance_contract)
         })
-        it("Debería al bajar el threshold del swap, hacer el swap de los tokens,enviar al distribuidor y emitir el evento",async function () {
-            const threshold = ethers.parseUnits("0.0003", 18);
-            await token.setSwapTokensAtAmount(threshold)
-            const swapAmount = await token.swapTokensAtAmount()
-            const token_address = await token.getAddress()
-            
-            const transfer1 = 1000000000000000;
-            const txOwnerToAddr1 = await token.transfer(addr1.address,transfer1)
-            const balance_contract = await token.balanceOf(token_address)
+        it("Debería taxar las interacciones con el LP", async function () {
+            const owner_address = await owner.getAddress()
+            const contract_address = await token.getAddress()
+            const balance_before = await token.balanceOf(contract_address)
 
-            const transfer2 = 2000000000000000;
-            const txOwnerToAddr2 = await token.transfer(addr2.address,transfer2)
-            const balance_contract_tx2 = await token.balanceOf(token_address)
-
-            const transfer3 = 3100000000000000;
-            const txOwnerToAddr3 = await token.transfer(addr3.address,transfer3)
-            const balance_contract_tx3 = await token.balanceOf(token_address)
-
-            const transfer4 = 100000000;
-            const txOwnerToAddr1_ = await token.transfer(addr1.address,transfer4)
-            const balance_contract_tx4 = await token.balanceOf(token_address)
-            const swapTokens = await token.swapTokensAtAmount()
-            
-                //Primero creamos el par de liquidez
+            //Add liquidity
             const factoryAddress = "0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10"
             const routerAddress = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4"
             const factory = await ethers.getContractAt("IJoeFactory", factoryAddress);
             const router = await ethers.getContractAt("IJoeRouter", routerAddress);
-
-            const contract_address = await token.getAddress()
-            const owner_address = await owner.getAddress()
-
-            const amountTokenDesired = ethers.parseUnits("100000000", 18);
-            const amountTokenMin = ethers.parseUnits("100000000", 18);
+            const amountTokenDesired = ethers.parseUnits("10000000000", 18);
             const amountAVAXMin = ethers.parseEther("0.6"); 
-
-            const to = owner_address; 
             const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // Establecer un deadline (por ejemplo, 20 minutos desde ahora)
-
-            await token.connect(wallet).approve(routerAddress, amountTokenDesired);
-
-            await router.connect(wallet).addLiquidityAVAX(
+            await token.connect(owner).approve(routerAddress, amountTokenDesired);
+            await router.connect(owner).addLiquidityAVAX(
                 contract_address,
                 amountTokenDesired,
                 0,
                 0,
-                to,
+                owner_address,
                 deadline,
                 { value: amountAVAXMin }
             );
 
+            const transfer1 = ethers.parseUnits("1000000",18);
+            const txOwnerToAddr1 = await token.transfer(addr1.address,transfer1)
 
 
             const outputTokenAddress = await router.WAVAX();
-            const swapt = 10000;
-            const path = [token_address, outputTokenAddress];
+            const swap = ethers.parseUnits("1000",18);
+            const path = [contract_address, outputTokenAddress];
 
-            // Aprobar el router para gastar los tokens
-            const apr = await token.connect(owner).approve(routerAddress, swapt);
-            // Realiza el swap
+
+            await token.connect(addr1).approve(routerAddress, swap);
+            await router.connect(addr1).swapExactTokensForAVAXSupportingFeeOnTransferTokens(
+                swap,
+                0,
+                path,
+                addr1.address,
+                deadline
+            );
+
+            const balance_after = await token.balanceOf(contract_address)
+            expect(balance_after).to.be.gt(balance_before)
+        })
+        it("Debería al bajar el threshold del swap, hacer el swap de los tokens,y repartir token reflection",async function () {
+            //Low the threshold for swap tokens
+            const threshold = ethers.parseUnits("0.0003", 18);
+            await token.setSwapTokensAtAmount(threshold)
+            const tokensAmount = await token.swapTokensAtAmount()
+
+
+            const contract_address = await token.getAddress()
+            const owner_address = await owner.getAddress()
+            
+            
+            //Add liquidity
+            const factoryAddress = "0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10"
+            const routerAddress = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4"
+            const factory = await ethers.getContractAt("IJoeFactory", factoryAddress);
+            const router = await ethers.getContractAt("IJoeRouter", routerAddress);
+            const amountTokenDesired = ethers.parseUnits("10000000000", 18);
+            const amountAVAXMin = ethers.parseEther("0.6"); 
+            const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // Establecer un deadline (por ejemplo, 20 minutos desde ahora)
+            await token.connect(owner).approve(routerAddress, amountTokenDesired);
+            await router.connect(owner).addLiquidityAVAX(
+                contract_address,
+                amountTokenDesired,
+                0,
+                0,
+                owner_address,
+                deadline,
+                { value: amountAVAXMin }
+            );
+
+            //Make transactions for taxing purposes
+            const transfer1 = 1000000000000000;
+            const txOwnerToAddr1 = await token.transfer(addr1.address,transfer1)
+            const balance_contract = await token.balanceOf(contract_address)
+            const transfer2 = 2000000000000000;
+            const txOwnerToAddr2 = await token.transfer(addr2.address,transfer2)
+            const balance_contract_tx2 = await token.balanceOf(contract_address)
+            const transfer3 = 3100000000000000;
+            const txOwnerToAddr3 = await token.transfer(addr3.address,transfer3)
+            const balance_contract_tx3 = await token.balanceOf(contract_address)
+            const transfer4 = 100000000;
+            const txOwnerToAddr1_ = await token.transfer(addr1.address,transfer4)
+            const balance_contract_tx4 = await token.balanceOf(contract_address)
+
+
+            //swap tokens to initiate swap
+            const outputTokenAddress = await router.WAVAX();
+            const swap = ethers.parseUnits("1000",18);
+            const path = [contract_address, outputTokenAddress];
+            await token.connect(owner).approve(routerAddress, swap);
             await router.connect(owner).swapExactTokensForAVAXSupportingFeeOnTransferTokens(
-                swapt,
+                swap,
                 0,
                 path,
                 owner_address,
                 deadline
             );
 
+
+            //addreses must got rewards
             const reflectionTokenAddress = await token.reflectionToken();
             const reflectionTokenContract = await ethers.getContractAt("IERC20", reflectionTokenAddress);
             const distributorContract_adress = await distributorContract.getAddress()
-            const owner_address_reflection = await reflectionTokenContract.balanceOf(distributorContract_adress)
-            console.log(owner_address_reflection)
+            const distributor_reflection = await reflectionTokenContract.balanceOf(distributorContract_adress)
+            const addr1_reflection = await reflectionTokenContract.balanceOf(addr1.address)
+            const addr2_reflection = await reflectionTokenContract.balanceOf(addr2.address)
+            const addr3_reflection = await reflectionTokenContract.balanceOf(addr3.address)
+            const owner_reflextion = await reflectionTokenContract.balanceOf(owner_address)
 
-            const reflections = await token.reflectionsEnabled()
-            console.log(reflections)
+            // Verificar que las direcciones han recibido las recompensas
+            expect(distributor_reflection).to.be.gt(0, "El distribuidor no ha recibido tokens de reflexión");
+            expect(addr1_reflection).to.be.gt(0, "La dirección 1 no ha recibido tokens de reflexión");
+            expect(addr2_reflection).to.be.gt(0, "La dirección 2 no ha recibido tokens de reflexión");
+            expect(addr3_reflection).to.be.gt(0, "La dirección 3 no ha recibido tokens de reflexión");
+            expect(owner_reflextion).to.be.gt(0, "El propietario no ha recibido tokens de reflexión");
 
+        })
+        it("Debería hacer tx para juntar el swap amount, hacer la reparticion del reward, cambiar el reflection token, y luego repartir el nuevo reflection token", async function (){
+            const threshold = ethers.parseUnits("0.0003", 18);
+            await token.setSwapTokensAtAmount(threshold)
+
+            const contract_address = await token.getAddress()
+            const owner_address = await owner.getAddress()
+
+            //Add liquidity
+            const factoryAddress = "0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10"
+            const routerAddress = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4"
+            const factory = await ethers.getContractAt("IJoeFactory", factoryAddress);
+            const router = await ethers.getContractAt("IJoeRouter", routerAddress);
+            const amountTokenDesired = ethers.parseUnits("50000000000", 18);
+            const amountAVAXMin = ethers.parseEther("2"); 
+            const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // Establecer un deadline (por ejemplo, 20 minutos desde ahora)
+            await token.connect(owner).approve(routerAddress, amountTokenDesired);
+            await router.connect(owner).addLiquidityAVAX(
+                contract_address,
+                amountTokenDesired,
+                0,
+                0,
+                owner_address,
+                deadline,
+                { value: amountAVAXMin }
+            );
+
+            //Make transactions for taxing purposes
+            const transfer1 = 1000000000000000;
+            const txOwnerToAddr1 = await token.transfer(addr1.address,transfer1)
+            const balance_contract = await token.balanceOf(contract_address)
+            const transfer2 = 2000000000000000;
+            const txOwnerToAddr2 = await token.transfer(addr2.address,transfer2)
+            const balance_contract_tx2 = await token.balanceOf(contract_address)
+            const transfer3 = 3100000000000000;
+            const txOwnerToAddr3 = await token.transfer(addr3.address,transfer3)
+            const balance_contract_tx3 = await token.balanceOf(contract_address)
+            const transfer4 = 400000000000000;
+            const txOwnerToAddr1_ = await token.transfer(addr1.address,transfer4)
+            const balance_contract_tx4 = await token.balanceOf(contract_address)
+            const transfer5 = 400000000000000;
+            const txOwnerToAddr2_ = await token.transfer(addr1.address,transfer5)
+            const balance_contract_tx5 = await token.balanceOf(contract_address)
+
+
+            //swap tokens to initiate swap
+            const outputTokenAddress = await router.WAVAX();
+            const swap = ethers.parseUnits("1000",18);
+            const path = [contract_address, outputTokenAddress];
+            await token.connect(owner).approve(routerAddress, swap);
+            await router.connect(owner).swapExactTokensForAVAXSupportingFeeOnTransferTokens(
+                swap,
+                0,
+                path,
+                owner_address,
+                deadline
+            );
+
+            //addreses must got rewards
+            const reflectionTokenAddress = await token.reflectionToken();
+            const reflectionTokenContract = await ethers.getContractAt("IERC20", reflectionTokenAddress);
+            const distributorContract_adress = await distributorContract.getAddress()
+            const distributor_reflection = await reflectionTokenContract.balanceOf(distributorContract_adress)
+            const addr1_reflection = await reflectionTokenContract.balanceOf(addr1.address)
+            console.log(`Reflejo de addr1: ${addr1_reflection}`)
+            const addr2_reflection = await reflectionTokenContract.balanceOf(addr2.address)
+            console.log(`Reflejo de addr2: ${addr2_reflection}`)
+            const addr3_reflection = await reflectionTokenContract.balanceOf(addr3.address)
+            console.log(`Reflejo de addr3: ${addr3_reflection}`)
+            const owner_reflextion = await reflectionTokenContract.balanceOf(owner_address)
+            console.log(`Reflejo del propietario: ${owner_reflextion}`)
+
+            const new_reflection = "0x420FcA0121DC28039145009570975747295f2329"
+            await (token.setReflectionToken(new_reflection))
+
+            const new_minperiod = 1;
+            await token.setDistributionCriteria(new_minperiod);
+
+            const transfer1_ = 2000000000000000;
+            await token.transfer(addr1.address,transfer1_)
+            const transfer2_ = 2000000000000000;
+            await token.transfer(addr2.address,transfer2_)
+            const transfer3_ = 2000000000000000;
+            await token.transfer(addr3.address,transfer3_)
+            const balanceAddr1 = await token.balanceOf(addr1.address)
+            console.log("transferencias hechas")
+            const balance_contract_2 = await token.balanceOf(contract_address)
+            console.log(balance_contract_2)
+            const swapAmount1 = await token.swapTokensAtAmount()
+            console.log(swapAmount1)
+            // Esperar 20 segundos para el swapping
+            const swapantes=await token.swapping()
+            console.log(swapantes)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const swapdespues = await token.swapping()
+            console.log(swapdespues)
+            const swap2 = ethers.parseUnits("0.001",18)
+            await token.connect(addr1).approve(routerAddress, swap2);
+            await router.connect(addr1).swapExactTokensForAVAXSupportingFeeOnTransferTokens(
+                swap2,
+                0,
+                path,
+                addr1.address,
+                deadline
+                );
+
+
+                const balance_contract_ = await token.balanceOf(contract_address)
+                console.log(balance_contract_)
+                const swapAmount = await token.swapTokensAtAmount()
+                console.log(swapAmount)
+                const avaxBalance = await ethers.provider.getBalance(contract_address)
+                console.log(avaxBalance)
+                //addreses must got rewards
+                const reflectionTokenAddressNew = await token.reflectionToken();
+                console.log(reflectionTokenAddressNew)
+
+                const reflectionTokenContractNew = await ethers.getContractAt("IERC20", reflectionTokenAddressNew);
+            
+                const distributorReflectionBalance = await reflectionTokenContractNew.balanceOf(distributorContract_adress);
+                console.log(`Balance de reflexión del distribuidor: ${distributorReflectionBalance}`);
+                const addr1_reflection_new = await reflectionTokenContractNew.balanceOf(addr1.address);
+                console.log(`Reflejo de addr1: ${addr1_reflection_new}`);
+                const addr2_reflection_new = await reflectionTokenContractNew.balanceOf(addr2.address);
+                console.log(`Reflejo de addr2: ${addr2_reflection_new}`);
+                const addr3_reflection_new = await reflectionTokenContractNew.balanceOf(addr3.address);
+                console.log(`Reflejo de addr3: ${addr3_reflection_new}`);
+                const owner_reflextion_new = await reflectionTokenContractNew.balanceOf(owner_address);
+                console.log(`Reflejo del propietario: ${owner_reflextion_new}`);
+                expect(addr1_reflection_new).to.be.gte(0, "La dirección 1 no ha recibido tokens de reflexión");
+                expect(addr2_reflection_new).to.be.gte(0, "La dirección 2 no ha recibido tokens de reflexión");
+                expect(addr3_reflection_new).to.be.gte(0, "La dirección 3 no ha recibido tokens de reflexión");
+                expect(owner_reflextion_new).to.be.gte(0, "El propietario no ha recibido tokens de reflexión");
+
+
+            //addreses must got rewards
+            // const reflectionTokenAddress = await token.reflectionToken();
+            // const reflectionTokenContract = await ethers.getContractAt("IERC20", reflectionTokenAddress);
+            // const distributorContract_adress = await distributorContract.getAddress()
+            // const distributor_reflection = await reflectionTokenContract.balanceOf(distributorContract_adress)
+            // const addr1_reflection = await reflectionTokenContract.balanceOf(addr1.address)
+            // const addr2_reflection = await reflectionTokenContract.balanceOf(addr2.address)
+            // const addr3_reflection = await reflectionTokenContract.balanceOf(addr3.address)
+            // const owner_reflextion = await reflectionTokenContract.balanceOf(owner_address)
+
+            // // Verificar que las direcciones han recibido las recompensas
+            // expect(distributor_reflection).to.be.gt(0, "El distribuidor no ha recibido tokens de reflexión");
+            // expect(addr1_reflection).to.be.gt(0, "La dirección 1 no ha recibido tokens de reflexión");
+            // expect(addr2_reflection).to.be.gt(0, "La dirección 2 no ha recibido tokens de reflexión");
+            // expect(addr3_reflection).to.be.gt(0, "La dirección 3 no ha recibido tokens de reflexión");
+            // expect(owner_reflextion).to.be.gt(0, "El propietario no ha recibido tokens de reflexión");
+
+
+            
+        })
+        it("Deberia hacer un cambio de token reflection y hacer un swap", async function () {
+            const new_reflection = "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"
+            const reflection_token = await token.reflectionToken()
+            await (token.setReflectionToken(new_reflection))
+
+            const owner_address = await owner.getAddress()
+            const contract_address = await token.getAddress()
+            const balance_before = await token.balanceOf(contract_address)
+
+            //Add liquidity
+            const factoryAddress = "0x9Ad6C38BE94206cA50bb0d90783181662f0Cfa10"
+            const routerAddress = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4"
+            const factory = await ethers.getContractAt("IJoeFactory", factoryAddress);
+            const router = await ethers.getContractAt("IJoeRouter", routerAddress);
+            const amountTokenDesired = ethers.parseUnits("10000000000", 18);
+            const amountAVAXMin = ethers.parseEther("0.6"); 
+            const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // Establecer un deadline (por ejemplo, 20 minutos desde ahora)
+            await token.connect(owner).approve(routerAddress, amountTokenDesired);
+            await router.connect(owner).addLiquidityAVAX(
+                contract_address,
+                amountTokenDesired,
+                0,
+                0,
+                owner_address,
+                deadline,
+                { value: amountAVAXMin }
+            );
+
+            const transfer1 = ethers.parseUnits("1000000",18);
+            const txOwnerToAddr1 = await token.transfer(addr1.address,transfer1)
+
+
+            const outputTokenAddress = await router.WAVAX();
+            const swap = ethers.parseUnits("1000",18);
+            const path = [contract_address, outputTokenAddress];
+
+
+            await token.connect(addr1).approve(routerAddress, swap);
+            await router.connect(addr1).swapExactTokensForAVAXSupportingFeeOnTransferTokens(
+                swap,
+                0,
+                path,
+                addr1.address,
+                deadline
+            );
+
+            const balance_after = await token.balanceOf(contract_address)
+            expect(balance_after).to.be.gt(balance_before)
+
+            
         })
         
     })

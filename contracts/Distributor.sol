@@ -23,7 +23,7 @@ contract Distributor is IDistributor {
 
     address public reflectionToken;
 
-    address[] shareholders;
+    address[] public shareholders;
 
     uint256 public totalShares;
     uint256 public totalDividends;
@@ -101,7 +101,7 @@ contract Distributor is IDistributor {
         shareholderIndexes[shareholder] = shareholders.length;
         shareholders.push(shareholder);
     }
-
+	
     function removeShareholder(address shareholder) internal {
         shareholders[shareholderIndexes[shareholder]] = shareholders[shareholders.length-1];
         shareholderIndexes[shareholders[shareholders.length-1]] = shareholderIndexes[shareholder];
@@ -179,6 +179,27 @@ contract Distributor is IDistributor {
         reflectionToken = _reflectionToken;
     }
 
+
+    function resetUnpaidEarnings() external onlyOwner {
+        for (uint256 i = 0; i < shareholders.length; i++) {
+            address shareholder = shareholders[i];
+            shares[shareholder].totalRealised = 0;
+            shares[shareholder].totalExcluded = 0;
+        }
+        totalDistributed = 0;
+        totalDividends = 0;
+        dividendsPerShare = 0;
+    }
+
+function withdrawOldReflectionToken(address tokenAddress, address to, uint256 amount) external onlyOwner {
+    require(tokenAddress != address(0), "Token address cannot be the zero address");
+    require(to != address(0), "Cannot withdraw to the zero address");
+    require(amount > 0, "Amount must be greater than zero");
+    uint256 balance = IERC20(tokenAddress).balanceOf(address(this));
+    require(balance >= amount, "Insufficient balance");
+
+    IERC20(tokenAddress).transfer(to, amount);
+}
 
 }
 
