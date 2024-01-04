@@ -2,18 +2,18 @@
 
 pragma solidity ^0.8.19;
 
-//Importaciones
+//Importations
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IJoeFactory,IJoeRouter,IJoe2Router} from "./interfaces/IJoe.sol";
 import "./interfaces/ERC20.sol";
 import {Distributor} from "./Distributor.sol";
 
-//Contrato
+//Contract
 contract Token is ERC20, Ownable {
 
     //State Variables
     uint256 public maxTx;
-    // uint256 public maxWallet;
+
 
     uint256[] public reflectionFee;
 
@@ -70,7 +70,7 @@ contract Token is ERC20, Ownable {
         distributorGas = 300000;
 
         maxTx = 1_000_000_000 * (10 ** 18);
-        // maxWallet = 1_000_000 * (10 ** 18); //limite de % para la primera hora
+
 
         distributionEnabled = true;
         reflectionsEnabled = true;
@@ -151,7 +151,7 @@ contract Token is ERC20, Ownable {
     function setReflectionToken(address _reflectionToken) external onlyOwner {
         require(_reflectionToken != address(0),"Reflection Token cannot be address zero");
 
-        // distributor.resetUnpaidEarnings();
+
         reflectionToken = _reflectionToken;
         distributor.updateReflectionToken(_reflectionToken);
         emit RewardTokenUpdated(_reflectionToken);
@@ -160,7 +160,6 @@ contract Token is ERC20, Ownable {
     function emergencyWithdrawAvax() external onlyOwner {
         uint256 balance = address(this).balance;
         require(balance > 0, "No AVAX balance to withdraw");
-        // Convertir 'owner' a 'address payable'
         address payable ownerPayable = payable(owner());
         (bool success, ) = ownerPayable.call{value: balance}("");
         require(success, "Transfer Failed");
@@ -218,7 +217,6 @@ contract Token is ERC20, Ownable {
 	function _transfer(address sender, address recipient, uint256 amount) internal override(ERC20){      
 		if(!isDividendExempt[recipient]) {
 			require(amount <= maxTx, "Amount over max transaction allowed");
-			// require(balanceOf(recipient) + amount <= maxWallet, "Max wallet reached");
 		}
 	
 		uint256 contractTokenBalance = balanceOf(address(this));

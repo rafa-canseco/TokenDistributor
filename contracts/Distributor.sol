@@ -32,7 +32,7 @@ contract Distributor is IDistributor {
     uint256 public constant dividendsPerShareAccuracyFactor = 10 ** 36;
 
     uint256 public minPeriod = 3600;
-    // uint256 public minDistribution = 1 * ( 10 **18 );//necesaria?
+
 
     uint256 currentIndex;
 
