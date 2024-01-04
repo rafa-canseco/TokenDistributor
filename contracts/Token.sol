@@ -132,6 +132,11 @@ contract Token is ERC20, Ownable {
         maxTx = 100_000_000_000 * (10 **18 );
     }
 
+    function adjustMaxTx(uint256 amount) external onlyOwner {
+        require(amount <= totalSupply(), "Amount cannot be over the total supply" );
+        maxTx = amount;
+    }
+
     function disableReflections() external onlyOwner {
         if(reflectionsEnabled == true)
         {

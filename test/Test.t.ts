@@ -151,6 +151,12 @@ describe("ContratoToken", function () {
             const distributor_reflection = await distributorContract.reflectionToken()
             expect(distributor_reflection).to.equal(new_reflection);
         })
+
+        it("Debería ajustar el máximo de transacción", async function () {
+            const newMaxTx = ethers.parseUnits("5000000", 18);
+            await token.adjustMaxTx(newMaxTx);
+            expect(await token.maxTx()).to.equal(newMaxTx);
+        });
         it("Debería permitir la retirada de emergencia de AVAX", async function () {
             const contract_address = await token.getAddress()
             const sendValue = ethers.parseEther("0.5");
@@ -558,15 +564,8 @@ describe("ContratoToken", function () {
             const reflectionTokenAddress = await token.reflectionToken();
             const reflectionTokenContract = await ethers.getContractAt("IERC20", reflectionTokenAddress);
             const distributorContract_adress = await distributorContract.getAddress()
-            const distributor_reflection = await reflectionTokenContract.balanceOf(distributorContract_adress)
-            const addr1_reflection = await reflectionTokenContract.balanceOf(addr1.address)
-            console.log(`Reflejo de addr1: ${addr1_reflection}`)
-            const addr2_reflection = await reflectionTokenContract.balanceOf(addr2.address)
-            console.log(`Reflejo de addr2: ${addr2_reflection}`)
-            const addr3_reflection = await reflectionTokenContract.balanceOf(addr3.address)
-            console.log(`Reflejo de addr3: ${addr3_reflection}`)
-            const owner_reflextion = await reflectionTokenContract.balanceOf(owner_address)
-            console.log(`Reflejo del propietario: ${owner_reflextion}`)
+
+
 
             const new_reflection = "0x420FcA0121DC28039145009570975747295f2329"
             await (token.setReflectionToken(new_reflection))
@@ -580,18 +579,10 @@ describe("ContratoToken", function () {
             await token.transfer(addr2.address,transfer2_)
             const transfer3_ = 2000000000000000;
             await token.transfer(addr3.address,transfer3_)
-            const balanceAddr1 = await token.balanceOf(addr1.address)
-            console.log("transferencias hechas")
-            const balance_contract_2 = await token.balanceOf(contract_address)
-            console.log(balance_contract_2)
-            const swapAmount1 = await token.swapTokensAtAmount()
-            console.log(swapAmount1)
-            // Esperar 20 segundos para el swapping
-            const swapantes=await token.swapping()
-            console.log(swapantes)
+
             await new Promise(resolve => setTimeout(resolve, 2000));
-            const swapdespues = await token.swapping()
-            console.log(swapdespues)
+
+
             const swap2 = ethers.parseUnits("0.001",18)
             await token.connect(addr1).approve(routerAddress, swap2);
             await router.connect(addr1).swapExactTokensForAVAXSupportingFeeOnTransferTokens(
@@ -604,50 +595,23 @@ describe("ContratoToken", function () {
 
 
                 const balance_contract_ = await token.balanceOf(contract_address)
-                console.log(balance_contract_)
                 const swapAmount = await token.swapTokensAtAmount()
-                console.log(swapAmount)
                 const avaxBalance = await ethers.provider.getBalance(contract_address)
-                console.log(avaxBalance)
-                //addreses must got rewards
                 const reflectionTokenAddressNew = await token.reflectionToken();
-                console.log(reflectionTokenAddressNew)
+
 
                 const reflectionTokenContractNew = await ethers.getContractAt("IERC20", reflectionTokenAddressNew);
             
                 const distributorReflectionBalance = await reflectionTokenContractNew.balanceOf(distributorContract_adress);
-                console.log(`Balance de reflexión del distribuidor: ${distributorReflectionBalance}`);
                 const addr1_reflection_new = await reflectionTokenContractNew.balanceOf(addr1.address);
-                console.log(`Reflejo de addr1: ${addr1_reflection_new}`);
                 const addr2_reflection_new = await reflectionTokenContractNew.balanceOf(addr2.address);
-                console.log(`Reflejo de addr2: ${addr2_reflection_new}`);
                 const addr3_reflection_new = await reflectionTokenContractNew.balanceOf(addr3.address);
-                console.log(`Reflejo de addr3: ${addr3_reflection_new}`);
                 const owner_reflextion_new = await reflectionTokenContractNew.balanceOf(owner_address);
-                console.log(`Reflejo del propietario: ${owner_reflextion_new}`);
+
                 expect(addr1_reflection_new).to.be.gte(0, "La dirección 1 no ha recibido tokens de reflexión");
                 expect(addr2_reflection_new).to.be.gte(0, "La dirección 2 no ha recibido tokens de reflexión");
                 expect(addr3_reflection_new).to.be.gte(0, "La dirección 3 no ha recibido tokens de reflexión");
                 expect(owner_reflextion_new).to.be.gte(0, "El propietario no ha recibido tokens de reflexión");
-
-
-            //addreses must got rewards
-            // const reflectionTokenAddress = await token.reflectionToken();
-            // const reflectionTokenContract = await ethers.getContractAt("IERC20", reflectionTokenAddress);
-            // const distributorContract_adress = await distributorContract.getAddress()
-            // const distributor_reflection = await reflectionTokenContract.balanceOf(distributorContract_adress)
-            // const addr1_reflection = await reflectionTokenContract.balanceOf(addr1.address)
-            // const addr2_reflection = await reflectionTokenContract.balanceOf(addr2.address)
-            // const addr3_reflection = await reflectionTokenContract.balanceOf(addr3.address)
-            // const owner_reflextion = await reflectionTokenContract.balanceOf(owner_address)
-
-            // // Verificar que las direcciones han recibido las recompensas
-            // expect(distributor_reflection).to.be.gt(0, "El distribuidor no ha recibido tokens de reflexión");
-            // expect(addr1_reflection).to.be.gt(0, "La dirección 1 no ha recibido tokens de reflexión");
-            // expect(addr2_reflection).to.be.gt(0, "La dirección 2 no ha recibido tokens de reflexión");
-            // expect(addr3_reflection).to.be.gt(0, "La dirección 3 no ha recibido tokens de reflexión");
-            // expect(owner_reflextion).to.be.gt(0, "El propietario no ha recibido tokens de reflexión");
-
 
             
         })
